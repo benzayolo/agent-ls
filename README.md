@@ -1,15 +1,38 @@
 # ols
 
-To install dependencies:
+CLI tool for managing opencode instances.
+
+## Install
+
+Download the latest binary from GitHub Releases:
+
+```bash
+curl -LO https://github.com/anomalyco/ols/releases/latest/download/ols
+chmod +x ols
+mv ols ~/bin/
+```
+
+## Development
+
+Install dependencies:
 
 ```bash
 bun install
 ```
 
-To run:
+Run:
 
 ```bash
 bun run index.ts
 ```
 
-This project was created using `bun init` in bun v1.3.7. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+## Release
+
+1. Bump version in `package.json`
+2. Build:
+   ```bash
+   VERSION=$(jq -r .version package.json) \
+     bun build index.ts --compile --target=bun-linux-x64 \
+     --define="VERSION=\"\$VERSION\"" --outfile ols
+   ```
+3. Release: `gh release create v<version> ./ols --title "v<version>"`

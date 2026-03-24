@@ -3,6 +3,8 @@ import { readdirSync, existsSync, unlinkSync, readFileSync } from "fs"
 import { join } from "path"
 import { $ } from "bun"
 
+declare const VERSION: string | undefined
+
 const INSTANCES_DIR = join(process.env.HOME!, ".local/share/opencode/instances")
 
 interface InstanceState {
@@ -120,6 +122,11 @@ async function attachSession(instance: InstanceState): Promise<void> {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
+
+  if (args.includes("--version") || args.includes("-v")) {
+    console.log(VERSION ?? "dev")
+    return
+  }
 
   if (args.includes("--json")) {
     const instances = discoverInstances()
