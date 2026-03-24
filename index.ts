@@ -1,11 +1,15 @@
 #!/usr/bin/env bun
-import { readdirSync, existsSync, unlinkSync, readFileSync } from "fs"
+import { readdirSync, existsSync, unlinkSync, readFileSync, mkdirSync, writeFileSync } from "fs"
 import { join } from "path"
 import { $ } from "bun"
 
 declare const VERSION: string | undefined
 
 const INSTANCES_DIR = join(process.env.HOME!, ".local/share/opencode/instances")
+const PLUGIN_DIR = join(process.env.HOME!, ".config/opencode/plugins")
+const PLUGIN_PATH = join(PLUGIN_DIR, "instance-tracker.ts")
+
+const PLUGIN_CODE = await Bun.file(join(import.meta.dir, "instance-tracker.ts")).text()
 
 interface InstanceState {
   pid: number
@@ -15,6 +19,22 @@ interface InstanceState {
   tmux_pane: string | null
   tmux_target: string | null
   started_at: number
+}
+
+function ensurePlugin(): void {
+  if (existsSync(PLUGIN_PATH)) {
+    return
+  }
+
+  try {
+    if (!existsSync(PLUGIN_DIR)) {
+      mkdirSync(PLUGIN_DIR, { recursive: true })
+    }
+    writeFileSync(PLUGIN_PATH, PLUGIN_CODE)
+    console.log(`Plugin installed to ${PLUGIN_PATH}`)
+  } catch (err) {
+    console.warn(`Warning: Could not install plugin: ${(err as Error).message}`)
+  }
 }
 
 function isProcessRunning(pid: number): boolean {
@@ -121,6 +141,8 @@ async function attachSession(instance: InstanceState): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  ensurePlugin()
+
   const args = process.argv.slice(2)
 
   if (args.includes("--version") || args.includes("-v")) {

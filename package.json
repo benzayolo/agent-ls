@@ -7,8 +7,7 @@
     "agent-ls": "./index.ts"
   },
   "scripts": {
-    "format": "prettier --write .",
-    "postinstall": "bun run setup.ts"
+    "format": "prettier --write ."
   },
   "private": true,
   "devDependencies": {
