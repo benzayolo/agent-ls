@@ -51,7 +51,7 @@ async function ensurePluginDependency(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  console.log("\nols setup\n")
+  console.log("\nagent-ls setup\n")
 
   if (existsSync(PLUGIN_TARGET)) {
     const overwrite = await prompt("Plugin already installed. Overwrite? (y/n): ")
@@ -74,7 +74,7 @@ async function main(): Promise<void> {
   console.log("Plugin installed to ~/.config/opencode/plugins/instance-tracker.ts")
   console.log("\nSetup complete!")
   console.log(
-    "Run 'ols' to list instances, 'ols switch <n>' or 'ols attach <n>' for tmux commands."
+    "Run 'agent-ls' to list instances, 'agent-ls switch <n>' or 'agent-ls attach <n>' for tmux commands."
   )
   console.log("Restart opencode instances for the plugin to take effect.")
 }

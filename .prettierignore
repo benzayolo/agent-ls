@@ -35,5 +35,5 @@ report.[a-9]_.[0-9]_.[0-9]_.json
 openspec
 .opencode
 
-# ols
+# agent-ls
 bun.lock

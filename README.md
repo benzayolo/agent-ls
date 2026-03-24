@@ -1,4 +1,4 @@
-# ols
+# agent-ls
 
 CLI tool for managing opencode instances.
 
@@ -7,9 +7,9 @@ CLI tool for managing opencode instances.
 Download the latest binary from GitHub Releases:
 
 ```bash
-curl -LO https://github.com/anomalyco/ols/releases/latest/download/ols
-chmod +x ols
-mv ols ~/bin/
+curl -LO https://github.com/anomalyco/agent-ls/releases/latest/download/agent-ls
+chmod +x agent-ls
+mv agent-ls ~/bin/
 ```
 
 ## Development
@@ -33,6 +33,6 @@ bun run index.ts
    ```bash
    VERSION=$(jq -r .version package.json) \
      bun build index.ts --compile --target=bun-linux-x64 \
-     --define="VERSION=\"\$VERSION\"" --outfile ols
+      --define="VERSION=\"\$VERSION\"" --outfile agent-ls
    ```
-3. Release: `gh release create v<version> ./ols --title "v<version>"`
+3. Release: `gh release create v<version> ./agent-ls --title "v<version>"`

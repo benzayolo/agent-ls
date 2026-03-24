@@ -137,7 +137,7 @@ async function main(): Promise<void> {
   if (args[0] === "switch" && args[1]) {
     const n = parseInt(args[1], 10)
     if (isNaN(n)) {
-      console.error("Usage: ols switch <n>")
+      console.error("Usage: agent-ls switch <n>")
       process.exit(1)
     }
     const instances = discoverInstances()
@@ -153,7 +153,7 @@ async function main(): Promise<void> {
   if (args[0] === "attach" && args[1]) {
     const n = parseInt(args[1], 10)
     if (isNaN(n)) {
-      console.error("Usage: ols attach <n>")
+      console.error("Usage: agent-ls attach <n>")
       process.exit(1)
     }
     const instances = discoverInstances()
