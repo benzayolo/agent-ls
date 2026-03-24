@@ -76,7 +76,7 @@ export const InstanceTracker: Plugin = async ({ directory, $ }) => {
   if (tmuxInfo.pane) {
     try {
       const result =
-        await $`tmux display-message -p #{session_name}:#{window_index}.#{pane_index}`.quiet()
+        await $`tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}'`.quiet()
       target = result.text().trim()
     } catch {
       target = tmuxInfo.pane
