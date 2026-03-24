@@ -7,7 +7,8 @@
     "ols": "./index.ts"
   },
   "scripts": {
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "postinstall": "bun run setup.ts"
   },
   "private": true,
   "devDependencies": {
