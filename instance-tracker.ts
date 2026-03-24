@@ -1,11 +1,10 @@
-import { existsSync } from "fs"
-import { mkdir, readFile, writeFile, unlink } from "fs/promises"
 import { join } from "path"
+import * as net from "net"
 import type { Plugin } from "@opencode-ai/plugin"
 
-const INSTANCES_DIR = join(process.env.HOME!, ".local/share/opencode/instances")
+const SOCKET_PATH = join(process.env.HOME!, ".local/share/opencode/daemon.sock")
 
-interface InstanceState {
+interface InstanceInfo {
   pid: number
   cwd: string
   status: string
@@ -13,10 +12,6 @@ interface InstanceState {
   tmux_pane: string | null
   tmux_target: string | null
   started_at: number
-}
-
-function getStateFilePath(pid: number): string {
-  return join(INSTANCES_DIR, `${pid}.json`)
 }
 
 function parseTmuxInfo(): { session: string | null; pane: string | null; target: string | null } {
@@ -40,31 +35,43 @@ function parseTmuxInfo(): { session: string | null; pane: string | null; target:
   }
 }
 
-async function ensureInstancesDir(): Promise<void> {
-  if (!existsSync(INSTANCES_DIR)) {
-    await mkdir(INSTANCES_DIR, { recursive: true })
+class DaemonConnection {
+  private socket: net.Socket | null = null
+  private connected = false
+
+  async connect(): Promise<boolean> {
+    return new Promise((resolve) => {
+      try {
+        this.socket = net.connect(SOCKET_PATH)
+
+        this.socket.on("connect", () => {
+          this.connected = true
+          resolve(true)
+        })
+
+        this.socket.on("error", () => {
+          this.connected = false
+          this.socket = null
+          resolve(false)
+        })
+
+        this.socket.on("close", () => {
+          this.connected = false
+          this.socket = null
+        })
+      } catch {
+        resolve(false)
+      }
+    })
   }
-}
 
-async function writeState(state: InstanceState): Promise<void> {
-  await ensureInstancesDir()
-  const filePath = getStateFilePath(state.pid)
-  await writeFile(filePath, JSON.stringify(state, null, 2))
-}
-
-async function readState(pid: number): Promise<InstanceState | null> {
-  const filePath = getStateFilePath(pid)
-  if (!existsSync(filePath)) {
-    return null
+  async send(msg: object): Promise<void> {
+    if (!this.socket || !this.connected) return
+    this.socket.write(JSON.stringify(msg) + "\n")
   }
-  const content = await readFile(filePath, "utf-8")
-  return JSON.parse(content) as InstanceState
-}
 
-async function removeState(pid: number): Promise<void> {
-  const filePath = getStateFilePath(pid)
-  if (existsSync(filePath)) {
-    await unlink(filePath)
+  isConnected(): boolean {
+    return this.connected
   }
 }
 
@@ -83,48 +90,43 @@ export const InstanceTracker: Plugin = async ({ directory, $ }) => {
     }
   }
 
-  const initialState: InstanceState = {
-    pid,
-    cwd: directory,
-    status: "starting",
-    tmux_session: tmuxInfo.session,
-    tmux_pane: tmuxInfo.pane,
-    tmux_target: target,
-    started_at: Date.now(),
+  const connection = new DaemonConnection()
+  const connected = await connection.connect()
+
+  if (!connected) {
+    console.warn(
+      "[instance-tracker] Warning: Could not connect to daemon, instance will not be tracked"
+    )
+  } else {
+    const info: InstanceInfo = {
+      pid,
+      cwd: directory,
+      status: "starting",
+      tmux_session: tmuxInfo.session,
+      tmux_pane: tmuxInfo.pane,
+      tmux_target: target,
+      started_at: Date.now(),
+    }
+
+    await connection.send({ type: "REGISTER", payload: info })
   }
-
-  await writeState(initialState)
-
-  process.on("exit", () => {
-    removeState(pid).catch(() => {})
-  })
-
-  process.on("SIGINT", () => {
-    removeState(pid).catch(() => {})
-    process.exit(0)
-  })
-
-  process.on("SIGTERM", () => {
-    removeState(pid).catch(() => {})
-    process.exit(0)
-  })
 
   return {
     event: async ({ event }) => {
+      if (!connection.isConnected()) return
+
       if (event.type === "session.status") {
-        const state = await readState(pid)
-        if (state) {
-          state.status = (event as any).status || "running"
-          await writeState(state)
-        }
+        await connection.send({
+          type: "UPDATE",
+          payload: { pid, status: (event as any).status || "running" },
+        })
       }
 
       if (event.type === "session.idle") {
-        const state = await readState(pid)
-        if (state) {
-          state.status = "idle"
-          await writeState(state)
-        }
+        await connection.send({
+          type: "UPDATE",
+          payload: { pid, status: "idle" },
+        })
       }
     },
   }

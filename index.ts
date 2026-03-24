@@ -1,79 +1,10 @@
 #!/usr/bin/env bun
-import { readdirSync, existsSync, unlinkSync, readFileSync, mkdirSync, writeFileSync } from "fs"
-import { join } from "path"
 import { $ } from "bun"
+import { getInstances, type InstanceInfo } from "./client"
 
 declare const VERSION: string | undefined
 
-const INSTANCES_DIR = join(process.env.HOME!, ".local/share/opencode/instances")
-const PLUGIN_DIR = join(process.env.HOME!, ".config/opencode/plugins")
-const PLUGIN_PATH = join(PLUGIN_DIR, "instance-tracker.ts")
-
-const PLUGIN_CODE = await Bun.file(join(import.meta.dir, "instance-tracker.ts")).text()
-
-interface InstanceState {
-  pid: number
-  cwd: string
-  status: string
-  tmux_session: string | null
-  tmux_pane: string | null
-  tmux_target: string | null
-  started_at: number
-}
-
-function ensurePlugin(): void {
-  if (existsSync(PLUGIN_PATH)) {
-    return
-  }
-
-  try {
-    if (!existsSync(PLUGIN_DIR)) {
-      mkdirSync(PLUGIN_DIR, { recursive: true })
-    }
-    writeFileSync(PLUGIN_PATH, PLUGIN_CODE)
-    console.log(`Plugin installed to ${PLUGIN_PATH}`)
-  } catch (err) {
-    console.warn(`Warning: Could not install plugin: ${(err as Error).message}`)
-  }
-}
-
-function isProcessRunning(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch {
-    return false
-  }
-}
-
-function discoverInstances(): InstanceState[] {
-  if (!existsSync(INSTANCES_DIR)) {
-    return []
-  }
-
-  const files = readdirSync(INSTANCES_DIR).filter((f) => f.endsWith(".json"))
-  const instances: InstanceState[] = []
-
-  for (const file of files) {
-    const pid = parseInt(file.replace(".json", ""), 10)
-
-    if (!isProcessRunning(pid)) {
-      unlinkSync(join(INSTANCES_DIR, file))
-      continue
-    }
-
-    try {
-      const content = readFileSync(join(INSTANCES_DIR, file), "utf-8")
-      instances.push(JSON.parse(content) as InstanceState)
-    } catch {
-      // Invalid JSON, skip
-    }
-  }
-
-  return instances.sort((a, b) => a.started_at - b.started_at)
-}
-
-function displayTable(instances: InstanceState[]): void {
+function displayTable(instances: InstanceInfo[]): void {
   if (instances.length === 0) {
     console.log("No opencode instances running")
     return
@@ -100,11 +31,11 @@ function displayTable(instances: InstanceState[]): void {
   rows.forEach((row) => console.log(formatRow(row)))
 }
 
-function displayJson(instances: InstanceState[]): void {
+function displayJson(instances: InstanceInfo[]): void {
   console.log(JSON.stringify(instances, null, 2))
 }
 
-async function switchPane(instance: InstanceState): Promise<void> {
+async function switchPane(instance: InstanceInfo): Promise<void> {
   const target = instance.tmux_target || instance.tmux_pane
   if (!target) {
     console.error("Instance not running in tmux")
@@ -131,7 +62,7 @@ async function switchPane(instance: InstanceState): Promise<void> {
   }
 }
 
-async function attachSession(instance: InstanceState): Promise<void> {
+async function attachSession(instance: InstanceInfo): Promise<void> {
   if (!instance.tmux_session) {
     console.error("Instance not running in tmux")
     process.exit(1)
@@ -141,8 +72,6 @@ async function attachSession(instance: InstanceState): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  ensurePlugin()
-
   const args = process.argv.slice(2)
 
   if (args.includes("--version") || args.includes("-v")) {
@@ -151,7 +80,7 @@ async function main(): Promise<void> {
   }
 
   if (args.includes("--json")) {
-    const instances = discoverInstances()
+    const instances = await getInstances()
     displayJson(instances)
     return
   }
@@ -162,7 +91,7 @@ async function main(): Promise<void> {
       console.error("Usage: agent-ls switch <n>")
       process.exit(1)
     }
-    const instances = discoverInstances()
+    const instances = await getInstances()
     const instance = instances[n - 1]
     if (!instance) {
       console.error(`Invalid instance number: ${n}`)
@@ -178,7 +107,7 @@ async function main(): Promise<void> {
       console.error("Usage: agent-ls attach <n>")
       process.exit(1)
     }
-    const instances = discoverInstances()
+    const instances = await getInstances()
     const instance = instances[n - 1]
     if (!instance) {
       console.error(`Invalid instance number: ${n}`)
@@ -188,7 +117,7 @@ async function main(): Promise<void> {
     return
   }
 
-  const instances = discoverInstances()
+  const instances = await getInstances()
   displayTable(instances)
 }
 
