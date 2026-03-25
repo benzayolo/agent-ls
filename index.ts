@@ -1,8 +1,32 @@
 #!/usr/bin/env bun
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
+import { join } from "path"
 import { $ } from "bun"
 import { getInstances, type InstanceInfo } from "./client"
 
 declare const VERSION: string | undefined
+
+const PLUGIN_DIR = join(process.env.HOME!, ".config/opencode/plugins")
+const PLUGIN_PATH = join(PLUGIN_DIR, "instance-tracker.ts")
+const PLUGIN_CODE = await Bun.file(join(import.meta.dir, "instance-tracker.ts")).text()
+
+function ensurePlugin(): void {
+  try {
+    if (existsSync(PLUGIN_PATH)) {
+      const existing = readFileSync(PLUGIN_PATH, "utf-8")
+      if (existing === PLUGIN_CODE) {
+        return
+      }
+    }
+
+    if (!existsSync(PLUGIN_DIR)) {
+      mkdirSync(PLUGIN_DIR, { recursive: true })
+    }
+    writeFileSync(PLUGIN_PATH, PLUGIN_CODE)
+  } catch (err) {
+    console.warn(`Warning: Could not install plugin: ${(err as Error).message}`)
+  }
+}
 
 function displayTable(instances: InstanceInfo[]): void {
   if (instances.length === 0) {
@@ -72,6 +96,8 @@ async function attachSession(instance: InstanceInfo): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  ensurePlugin()
+
   const args = process.argv.slice(2)
 
   if (args.includes("--version") || args.includes("-v")) {
