@@ -4,10 +4,16 @@ import { join } from "path"
 import { spawn } from "child_process"
 import * as net from "net"
 
-const SOCKET_DIR = join(process.env.HOME!, ".local/share/opencode")
-const SOCKET_PATH = join(SOCKET_DIR, "daemon.sock")
+export type AgentType = "opencode" | "claude"
 
-interface InstanceInfo {
+export const SOCKET_PATHS: Record<AgentType, string> = {
+  opencode: join(process.env.HOME!, ".local/share/opencode/daemon.sock"),
+  claude: join(process.env.HOME!, ".local/share/claude/daemon.sock"),
+}
+
+const SOCKET_PATH = SOCKET_PATHS.opencode
+
+export interface InstanceInfo {
   pid: number
   cwd: string
   status: string
@@ -24,12 +30,6 @@ interface Message {
 
 const registry = new Map<number, InstanceInfo>()
 const clientPids = new Map<net.Socket, number>()
-
-function ensureSocketDir(): void {
-  if (!existsSync(SOCKET_DIR)) {
-    mkdirSync(SOCKET_DIR, { recursive: true })
-  }
-}
 
 function handleMessage(socket: net.Socket, data: string): void {
   let msg: Message
@@ -77,6 +77,20 @@ function handleMessage(socket: net.Socket, data: string): void {
       break
     }
 
+    case "UNREGISTER": {
+      const pid = msg.payload.pid
+      if (registry.has(pid)) {
+        registry.delete(pid)
+        clientPids.delete(socket)
+        socket.write(JSON.stringify({ type: "UNREGISTERED", payload: { success: true } }) + "\n")
+      } else {
+        socket.write(
+          JSON.stringify({ type: "ERROR", payload: { message: "Instance not found" } }) + "\n"
+        )
+      }
+      break
+    }
+
     default:
       socket.write(
         JSON.stringify({
@@ -88,20 +102,16 @@ function handleMessage(socket: net.Socket, data: string): void {
 }
 
 function handleDisconnect(socket: net.Socket): void {
-  const pid = clientPids.get(socket)
-  if (pid !== undefined) {
-    registry.delete(pid)
-    clientPids.delete(socket)
-  }
+  clientPids.delete(socket)
 }
 
-function isDaemonRunning(): boolean {
-  if (!existsSync(SOCKET_PATH)) {
+function isDaemonRunning(socketPath: string = SOCKET_PATH): boolean {
+  if (!existsSync(socketPath)) {
     return false
   }
 
   try {
-    const client = net.connect(SOCKET_PATH)
+    const client = net.connect(socketPath)
     client.write(JSON.stringify({ type: "LIST" }) + "\n")
     client.destroy()
     return true
@@ -110,15 +120,20 @@ function isDaemonRunning(): boolean {
   }
 }
 
-export function startServer(): void {
-  ensureSocketDir()
+export function startServer(agent: AgentType = "opencode"): void {
+  const socketPath = SOCKET_PATHS[agent]
+  const socketDir = join(socketPath, "..")
 
-  if (existsSync(SOCKET_PATH)) {
-    if (isDaemonRunning()) {
+  if (!existsSync(socketDir)) {
+    mkdirSync(socketDir, { recursive: true })
+  }
+
+  if (existsSync(socketPath)) {
+    if (isDaemonRunning(socketPath)) {
       console.log("Daemon already running")
       process.exit(0)
     }
-    unlinkSync(SOCKET_PATH)
+    unlinkSync(socketPath)
   }
 
   const server = net.createServer((socket) => {
@@ -140,42 +155,51 @@ export function startServer(): void {
     socket.on("error", () => handleDisconnect(socket))
   })
 
-  server.listen(SOCKET_PATH, () => {
-    console.log(`Daemon listening on ${SOCKET_PATH}`)
+  server.listen(socketPath, () => {
+    console.log(`Daemon listening on ${socketPath}`)
   })
 
   process.on("SIGINT", () => {
     server.close()
-    if (existsSync(SOCKET_PATH)) {
-      unlinkSync(SOCKET_PATH)
+    if (existsSync(socketPath)) {
+      unlinkSync(socketPath)
     }
     process.exit(0)
   })
 
   process.on("SIGTERM", () => {
     server.close()
-    if (existsSync(SOCKET_PATH)) {
-      unlinkSync(SOCKET_PATH)
+    if (existsSync(socketPath)) {
+      unlinkSync(socketPath)
     }
     process.exit(0)
   })
 }
 
-export function spawnDaemon(): void {
-  if (isDaemonRunning()) {
+export function spawnDaemon(agent: AgentType = "opencode"): void {
+  const socketPath = SOCKET_PATHS[agent]
+  if (isDaemonRunning(socketPath)) {
     return
   }
 
-  const child = spawn(process.execPath, ["--daemon"], {
+  const child = spawn(process.execPath, [import.meta.path, "--daemon", `--agent=${agent}`], {
     detached: true,
     stdio: "ignore",
   })
   child.unref()
 
   let attempts = 0
-  while (!isDaemonRunning() && attempts < 50) {
+  while (!isDaemonRunning(socketPath) && attempts < 50) {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)
     attempts++
+  }
+}
+
+if (import.meta.main) {
+  if (process.argv.includes("--daemon")) {
+    const agentArg = process.argv.find((arg) => arg.startsWith("--agent="))
+    const agent: AgentType = agentArg ? (agentArg.split("=")[1] as AgentType) : "opencode"
+    startServer(agent)
   }
 }
 
