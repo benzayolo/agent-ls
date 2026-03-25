@@ -110,7 +110,7 @@ function isDaemonRunning(): boolean {
   }
 }
 
-function startServer(): void {
+export function startServer(): void {
   ensureSocketDir()
 
   if (existsSync(SOCKET_PATH)) {
@@ -166,7 +166,7 @@ export function spawnDaemon(): void {
     return
   }
 
-  const child = spawn(process.execPath, [import.meta.path, "--daemon"], {
+  const child = spawn(process.execPath, ["--daemon"], {
     detached: true,
     stdio: "ignore",
   })
@@ -176,12 +176,6 @@ export function spawnDaemon(): void {
   while (!isDaemonRunning() && attempts < 50) {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)
     attempts++
-  }
-}
-
-if (import.meta.main) {
-  if (process.argv.includes("--daemon")) {
-    startServer()
   }
 }
 

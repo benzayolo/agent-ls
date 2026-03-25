@@ -3,12 +3,27 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import { $ } from "bun"
 import { getInstances, type InstanceInfo } from "./client"
+import { startServer } from "./daemon"
 
 declare const VERSION: string | undefined
 
 const PLUGIN_DIR = join(process.env.HOME!, ".config/opencode/plugins")
 const PLUGIN_PATH = join(PLUGIN_DIR, "instance-tracker.ts")
-const PLUGIN_CODE = await Bun.file(join(import.meta.dir, "instance-tracker.ts")).text()
+
+async function getPluginCode(): Promise<string> {
+  try {
+    const { PLUGIN_CODE } = await import("./plugin-code")
+    return PLUGIN_CODE
+  } catch {
+    return Bun.file(join(import.meta.dir, "instance-tracker.ts")).text()
+  }
+}
+
+const PLUGIN_CODE = await getPluginCode()
+
+if (process.argv.includes("--daemon")) {
+  startServer()
+}
 
 function ensurePlugin(): void {
   try {

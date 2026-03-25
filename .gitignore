@@ -5,6 +5,7 @@ node_modules
 out
 dist
 *.tgz
+agent-ls
 
 # code coverage
 coverage
