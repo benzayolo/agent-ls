@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "f
 import { join } from "path"
 import { $ } from "bun"
 import { getInstances, getAllInstances, type InstanceInfo } from "./client"
-import { startServer, type AgentType } from "./daemon"
+import { startServer, spawnDaemon, type AgentType } from "./daemon"
 import { configExists, loadConfig, saveConfig, getConfigPath, type Config } from "./config"
 
 declare const VERSION: string | undefined
@@ -175,6 +175,12 @@ async function runSetupWizard(): Promise<Config> {
 
   if (agents.includes("claude")) {
     await installClaudeTracking()
+  }
+
+  console.log("\nStarting daemons...\n")
+  for (const agent of agents) {
+    spawnDaemon(agent)
+    console.log(`  ✓ ${agent} daemon started`)
   }
 
   console.log(`\nConfig saved to ${getConfigPath()}`)
