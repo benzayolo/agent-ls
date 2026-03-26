@@ -73,6 +73,8 @@ async function promptAgentSelection(): Promise<AgentType[]> {
     })
   })
 
+  process.stdin.pause()
+
   switch (choice) {
     case "1":
       return ["opencode"]
@@ -89,8 +91,11 @@ async function promptAgentSelection(): Promise<AgentType[]> {
 function installOpencodeTracking(): void {
   try {
     if (!existsSync(PLUGIN_DIR)) {
+      console.log(`  Creating ${PLUGIN_DIR.replace(process.env.HOME!, "~")}/`)
       mkdirSync(PLUGIN_DIR, { recursive: true })
+      console.log("  ✓ Created plugin directory")
     }
+    console.log(`  Creating ${PLUGIN_PATH.replace(process.env.HOME!, "~")}`)
     writeFileSync(PLUGIN_PATH, PLUGIN_CODE)
     console.log("  ✓ opencode plugin installed")
   } catch (err) {
@@ -104,10 +109,15 @@ async function installClaudeTracking(): Promise<void> {
     const hookScriptPath = join(hooksDir, "agent-ls-session.sh")
 
     if (!existsSync(hooksDir)) {
+      console.log(`  Creating ${hooksDir.replace(process.env.HOME!, "~")}/`)
       mkdirSync(hooksDir, { recursive: true })
+      console.log("  ✓ Created hooks directory")
     }
+
+    console.log(`  Creating ${hookScriptPath.replace(process.env.HOME!, "~")}`)
     writeFileSync(hookScriptPath, SHELL_HOOK_SCRIPT)
     chmodSync(hookScriptPath, 0o755)
+    console.log("  ✓ Created hook script")
 
     let settings: any = {}
     if (existsSync(CLAUDE_SETTINGS_PATH)) {
@@ -144,6 +154,7 @@ async function installClaudeTracking(): Promise<void> {
     addHook("UserPromptSubmit", hookCommand)
     addHook("SessionEnd", hookCommand)
 
+    console.log(`  Updating ${CLAUDE_SETTINGS_PATH.replace(process.env.HOME!, "~")}`)
     writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2))
     console.log("  ✓ claude hooks installed")
   } catch (err) {
@@ -167,6 +178,7 @@ async function runSetupWizard(): Promise<Config> {
   }
 
   console.log(`\nConfig saved to ${getConfigPath()}`)
+  console.log("\nSetup complete! You can now run `agent-ls` to list running instances.")
   return config
 }
 
@@ -254,7 +266,8 @@ async function main(): Promise<void> {
   let config = loadConfig()
   if (!config) {
     console.log("First run detected. Starting setup wizard...\n")
-    config = await runSetupWizard()
+    await runSetupWizard()
+    return
   }
 
   if (config.agents.includes("opencode")) {
