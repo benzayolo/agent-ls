@@ -102,6 +102,10 @@ function handleMessage(socket: net.Socket, data: string): void {
 }
 
 function handleDisconnect(socket: net.Socket): void {
+  const pid = clientPids.get(socket)
+  if (pid !== undefined) {
+    registry.delete(pid)
+  }
   clientPids.delete(socket)
 }
 
