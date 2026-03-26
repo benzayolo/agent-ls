@@ -15,6 +15,7 @@ const SOCKET_PATH = SOCKET_PATHS.opencode
 
 export interface InstanceInfo {
   pid: number
+  session_id?: string
   cwd: string
   status: string
   tmux_session: string | null
@@ -28,8 +29,11 @@ interface Message {
   payload?: any
 }
 
-const registry = new Map<number, InstanceInfo>()
-const clientPids = new Map<net.Socket, number>()
+const registry = new Map<string, InstanceInfo>()
+
+function getKey(payload: any): string {
+  return payload.session_id || String(payload.pid)
+}
 
 function handleMessage(socket: net.Socket, data: string): void {
   let msg: Message
@@ -42,8 +46,10 @@ function handleMessage(socket: net.Socket, data: string): void {
 
   switch (msg.type) {
     case "REGISTER": {
+      const key = getKey(msg.payload)
       const info: InstanceInfo = {
         pid: msg.payload.pid,
+        session_id: msg.payload.session_id,
         cwd: msg.payload.cwd,
         status: msg.payload.status || "starting",
         tmux_session: msg.payload.tmux_session || null,
@@ -51,15 +57,14 @@ function handleMessage(socket: net.Socket, data: string): void {
         tmux_target: msg.payload.tmux_target || null,
         started_at: msg.payload.started_at || Date.now(),
       }
-      registry.set(info.pid, info)
-      clientPids.set(socket, info.pid)
+      registry.set(key, info)
       socket.write(JSON.stringify({ type: "REGISTERED", payload: { success: true } }) + "\n")
       break
     }
 
     case "UPDATE": {
-      const pid = msg.payload.pid
-      const existing = registry.get(pid)
+      const key = getKey(msg.payload)
+      const existing = registry.get(key)
       if (existing) {
         existing.status = msg.payload.status || existing.status
         socket.write(JSON.stringify({ type: "UPDATED", payload: { success: true } }) + "\n")
@@ -78,10 +83,9 @@ function handleMessage(socket: net.Socket, data: string): void {
     }
 
     case "UNREGISTER": {
-      const pid = msg.payload.pid
-      if (registry.has(pid)) {
-        registry.delete(pid)
-        clientPids.delete(socket)
+      const key = getKey(msg.payload)
+      if (registry.has(key)) {
+        registry.delete(key)
         socket.write(JSON.stringify({ type: "UNREGISTERED", payload: { success: true } }) + "\n")
       } else {
         socket.write(
@@ -102,11 +106,7 @@ function handleMessage(socket: net.Socket, data: string): void {
 }
 
 function handleDisconnect(socket: net.Socket): void {
-  const pid = clientPids.get(socket)
-  if (pid !== undefined) {
-    registry.delete(pid)
-  }
-  clientPids.delete(socket)
+  // No cleanup needed - instances persist until explicit UNREGISTER
 }
 
 function isDaemonRunning(socketPath: string = SOCKET_PATH): boolean {

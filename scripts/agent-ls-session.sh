@@ -43,9 +43,23 @@ ensure_socket_dir() {
   fi
 }
 
+ensure_daemon_running() {
+  if [ ! -S "$SOCKET_PATH" ]; then
+    if command -v agent-ls &>/dev/null; then
+      (agent-ls --daemon --agent=claude &)
+    fi
+    local attempts=0
+    while [ ! -S "$SOCKET_PATH" ] && [ $attempts -lt 50 ]; do
+      sleep 0.1
+      attempts=$((attempts + 1))
+    done
+  fi
+}
+
 send_to_daemon() {
   local msg="$1"
   ensure_socket_dir
+  ensure_daemon_running
   if command -v nc &>/dev/null; then
     echo "$msg" | nc -q 0 -U "$SOCKET_PATH" 2>/dev/null
   fi
@@ -61,17 +75,17 @@ EOF
 }
 
 handle_stop() {
-  local msg='{"type":"UPDATE","payload":{"pid":'"$$"',"status":"idle"}}'
+  local msg='{"type":"UPDATE","payload":{"session_id":"'"$SESSION_ID"'","status":"idle"}}'
   send_to_daemon "$msg"
 }
 
 handle_user_prompt_submit() {
-  local msg='{"type":"UPDATE","payload":{"pid":'"$$"',"status":"running"}}'
+  local msg='{"type":"UPDATE","payload":{"session_id":"'"$SESSION_ID"'","status":"running"}}'
   send_to_daemon "$msg"
 }
 
 handle_session_end() {
-  local msg='{"type":"UNREGISTER","payload":{"pid":'"$$"'}}'
+  local msg='{"type":"UNREGISTER","payload":{"session_id":"'"$SESSION_ID"'"}}'
   send_to_daemon "$msg"
 }
 
